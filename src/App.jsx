@@ -13,7 +13,8 @@ const App = () => {
     tool,
     updateShape,
     undo,
-    redo
+    redo,
+    clearAll
   } = useStore();
 
   const [scale, setScale] = useState(1);
@@ -21,7 +22,6 @@ const App = () => {
   const stageRef = useRef(null);
   const transformerRef = useRef(null);
   
-  // For drawing tools
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPoints, setCurrentPoints] = useState([]);
 
@@ -49,20 +49,96 @@ const App = () => {
     });
   }, []);
 
-  const handleDragEnd = (e) => {
-    if (e.target !== stageRef.current) return;
-    setPosition({
-      x: e.target.x(),
-      y: e.target.y(),
-    });
-  };
-
   const getMousePos = (e) => {
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
     if (!pointer) return null;
     const transform = stage.getAbsoluteTransform().invert();
     return transform.point(pointer);
+  };
+
+  const exportAsPNG = (stage) => {
+    if (!stage) return;
+    const originalX = stage.x();
+    const originalY = stage.y();
+    const originalScale = stage.scaleX();
+
+    stage.setAttrs({ x: 0, y: 0, scaleX: 1, scaleY: 1 });
+    stage.batchDraw();
+
+    const dataURL = stage.toDataURL({ pixelRatio: 2 });
+    const link = document.createElement('a');
+    link.download = 'canvas-export.png';
+    link.href = dataURL;
+    link.click();
+
+    stage.setAttrs({ x: originalX, y: originalY, scaleX: originalScale, scaleY: originalScale });
+    stage.batchDraw();
+  };
+
+  const exportAsSVG = (shapes) => {
+    if (shapes.length === 0) {
+      alert("No shapes to export!");
+      return;
+    }
+
+    // Find bounding box to set viewbox
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    shapes.forEach(s => {
+      if (s.type === 'rect') {
+        minX = Math.min(minX, s.x);
+        minY = Math.min(minY, s.y);
+        maxX = Math.max(maxX, s.x + s.width);
+        maxY = Math.max(maxY, s.y + s.height);
+      } else if (s.type === 'circle') {
+        minX = Math.min(minX, s.x - s.radius);
+        minY = Math.min(minY, s.y - s.radius);
+        maxX = Math.max(maxX, s.x + s.radius);
+        maxY = Math.max(maxY, s.y + s.radius);
+      } else if (s.type === 'line' || s.type === 'pen') {
+        for (let i = 0; i < s.points.length; i += 2) {
+          minX = Math.min(minX, s.points[i]);
+          minY = Math.min(minY, s.points[i+1]);
+          maxX = Math.max(maxX, s.points[i]);
+          maxY = Math.max(maxY, s.points[i+1]);
+        }
+      }
+    });
+
+    // Add padding
+    const padding = 20;
+    const width = (maxX - minX) + padding * 2;
+    const height = (maxY - minY) + padding * 2;
+    const viewBox = `${minX - padding} ${minY - padding} ${width} ${height}`;
+
+    let svgContent = '';
+    shapes.forEach(s => {
+      const fill = s.fill || 'none';
+      const stroke = s.stroke || 'black';
+      const strokeWidth = s.strokeWidth || 2;
+      const opacity = s.opacity ?? 1;
+
+      if (s.type === 'rect') {
+        svgContent += `<rect x="${s.x}" y="${s.y}" width="${s.width}" height="${s.height}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />\n`;
+      } else if (s.type === 'circle') {
+        svgContent += `<circle cx="${s.x}" cy="${s.y}" r="${s.radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />\n`;
+      } else if (s.type === 'line' || s.type === 'pen') {
+        const pointsStr = s.points.join(' ');
+        // For 'line', we might want to connect start and end? No, Konva Line is a path.
+        // A simple polyline is usually enough for Konva Line/Pen.
+        svgContent += `<polyline points="${pointsStr}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" />\n`;
+      }
+    });
+
+    const svgString = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${width}" height="${height}">${svgContent}</svg>`;
+    
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'canvas-export.svg';
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleStageMouseDown = (e) => {
@@ -108,11 +184,9 @@ const App = () => {
 
     setCurrentPoints((prev) => {
       if (tool === 'line') {
-        // For line, we only update the last two coordinates (the end point)
         if (prev.length < 2) return [pos.x, pos.y, pos.x, pos.y];
         return [prev[0], prev[1], pos.x, pos.y];
       } else {
-        // For pen, append the new point
         return [...prev, pos.x, pos.y];
       }
     });
@@ -182,17 +256,107 @@ const App = () => {
     }}>
       <div style={{ 
         position: 'absolute', top: 10, left: 10, zIndex: 10,
-        display: 'flex', gap: '10px', background: 'white', padding: '10px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+        display: 'flex', gap: '6px', background: 'white', padding: '8px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+        alignItems: 'center', fontFamily: 'sans-serif'
       }}>
-        <button onClick={() => setTool('select')} style={{ fontWeight: tool === 'select' ? 'bold' : 'normal' }}>选择</button>
-        <button onClick={() => setTool('rect')} style={{ fontWeight: tool === 'rect' ? 'bold' : 'normal' }}>矩形</button>
-        <button onClick={() => setTool('circle')} style={{ fontWeight: tool === 'circle' ? 'bold' : 'normal' }}>圆形</button>
-        <button onClick={() => setTool('line')} style={{ fontWeight: tool === 'line' ? 'bold' : 'normal' }}>直线</button>
-        <button onClick={() => setTool('pen')} style={{ fontWeight: tool === 'pen' ? 'bold' : 'normal' }}>画笔</button>
-        <div style={{ width: '1px', background: '#eee', margin: '0 5px' }}></div >
-        <button onClick={undo} style={{ fontWeight: tool === 'undo' ? 'bold' : 'normal' }}>撤销</button>
-        <button onClick={redo} style={{ fontWeight: tool === 'redo' ? 'bold' : 'normal' }}>重做</button>
-      </div >
+        {/* Drawing Tools */}
+        <div style={{ display: 'flex', gap: '4px', padding: '4px', background: '#f5f5f5', borderRadius: '8px' }}>
+          <button 
+            onClick={() => setTool('select')} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: tool === 'select' ? '#fff' : 'transparent',
+              boxShadow: tool === 'select' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              fontWeight: tool === 'select' ? 'bold' : 'normal' 
+            }}
+          >选择</button>
+          <button 
+            onClick={() => setTool('rect')} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: tool === 'rect' ? '#fff' : 'transparent',
+              boxShadow: tool === 'rect' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              fontWeight: tool === 'rect' ? 'bold' : 'normal' 
+            }}
+          >矩形</button>
+          <button 
+            onClick={() => setTool('circle')} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: tool === 'circle' ? '#fff' : 'transparent',
+              boxShadow: tool === 'circle' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              fontWeight: tool === 'circle' ? 'bold' : 'normal' 
+            }}
+          >圆形</button>
+          <button 
+            onClick={() => setTool('line')} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: tool === 'line' ? '#fff' : 'transparent',
+              boxShadow: tool === 'line' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              fontWeight: tool === 'line' ? 'bold' : 'normal' 
+            }}
+          >直线</button>
+          <button 
+            onClick={() => setTool('pen')} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: tool === 'pen' ? '#fff' : 'transparent',
+              boxShadow: tool === 'pen' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+              fontWeight: tool === 'pen' ? 'bold' : 'normal' 
+            }}
+          >画笔</button>
+        </div>
+
+        <div style={{ width: '1px', height: '24px', background: '#ddd', margin: '0 4px' }} />
+
+        {/* History Tools */}
+        <div style={{ display: 'flex', gap: '4px', padding: '4px', background: '#f5f5f5', borderRadius: '8px' }}>
+          <button 
+            onClick={undo} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: 'transparent',
+            }}
+          >撤销</button>
+          <button 
+            onClick={redo} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: 'transparent',
+            }}
+          >重做</button>
+        </div>
+
+        <div style={{ width: '1px', height: '24px', background: '#ddd', margin: '0 4px' }} />
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button 
+            onClick={() => { if(window.confirm('Are you sure?')) clearAll(); }} 
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              color: '#ff4d4f', background: 'transparent',
+            }}
+          >清空</button>
+          <button 
+            onClick={() => exportAsPNG(stageRef.current)}
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: '#e6f7ff', color: '#1890ff'
+            }}
+          >PNG</button>
+          <button 
+            onClick={() => exportAsSVG(shapes)}
+            style={{ 
+              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
+              backgroundColor: '#f6ffed', color: '#52c41a'
+            }}
+          >SVG</button>
+        </div>
+      </div>
+
+
 
       <PropertyEditor />
 
@@ -206,7 +370,7 @@ const App = () => {
         y={position.y}
         onWheel={handleWheel}
         draggable={tool === 'select'}
-        onDragEnd={handleDragEnd}
+        onDragEnd={handleShapeDragEnd}
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
@@ -232,13 +396,13 @@ const App = () => {
             };
 
             if (shape.type === 'rect') {
-              return <Rect {...commonProps} width={shape.width} height={shape.height} />;
+              return <Rect key={shape.id} {...commonProps} width={shape.width} height={shape.height} />;
             } else if (shape.type === 'circle') {
-              return <Circle {...commonProps} radius={shape.radius} />;
+              return <Circle key={shape.id} {...commonProps} radius={shape.radius} />;
             } else if (shape.type === 'line') {
-              return <Line {...commonProps} points={shape.points} tension={0} lineCap="round" lineJoin="round" />;
+              return <Line key={shape.id} {...commonProps} points={shape.points} tension={0} lineCap="round" lineJoin="round" hitStrokeWidth={20} />;
             } else if (shape.type === 'pen') {
-              return <Line {...commonProps} points={shape.points} tension={0.5} lineCap="round" lineJoin="round" />;
+              return <Line key={shape.id} {...commonProps} points={shape.points} tension={0.5} lineCap="round" lineJoin="round" hitStrokeWidth={20} />;
             }
             return null;
           })}
