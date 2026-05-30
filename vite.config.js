@@ -7,10 +7,10 @@ export default defineConfig({
     react(),
     electron({
       main: {
-        entry: 'electron/main.js',
+        entry: './electron/main.js',
       },
       preload: {
-        input: 'electron/preload.js',
+        input: './electron/preload.js',
       },
     }),
   ],
