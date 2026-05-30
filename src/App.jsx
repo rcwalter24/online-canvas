@@ -53,8 +53,7 @@ const App = () => {
     const stage = e.target.getStage();
     const pointer = stage.getPointerPosition();
     if (!pointer) return null;
-    const transform = stage.getAbsoluteTransform().invert();
-    return transform.point(pointer);
+    return stage.getRelativePointerPosition();
   };
 
   const exportAsPNG = (stage) => {
@@ -82,7 +81,6 @@ const App = () => {
       return;
     }
 
-    // Find bounding box to set viewbox
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     shapes.forEach(s => {
       if (s.type === 'rect') {
@@ -98,14 +96,13 @@ const App = () => {
       } else if (s.type === 'line' || s.type === 'pen') {
         for (let i = 0; i < s.points.length; i += 2) {
           minX = Math.min(minX, s.points[i]);
-          minY = Math.min(minY, s.points[i+1]);
+          minY = Math.min(minY, s.points[i + 1]);
           maxX = Math.max(maxX, s.points[i]);
-          maxY = Math.max(maxY, s.points[i+1]);
+          maxY = Math.max(maxY, s.points[i + 1]);
         }
       }
     });
 
-    // Add padding
     const padding = 20;
     const width = (maxX - minX) + padding * 2;
     const height = (maxY - minY) + padding * 2;
@@ -124,8 +121,6 @@ const App = () => {
         svgContent += `<circle cx="${s.x}" cy="${s.y}" r="${s.radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />\n`;
       } else if (s.type === 'line' || s.type === 'pen') {
         const pointsStr = s.points.join(' ');
-        // For 'line', we might want to connect start and end? No, Konva Line is a path.
-        // A simple polyline is usually enough for Konva Line/Pen.
         svgContent += `<polyline points="${pointsStr}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" />\n`;
       }
     });
@@ -143,10 +138,10 @@ const App = () => {
 
   const handleStageMouseDown = (e) => {
     if (tool === 'select') {
-        if (e.target === e.target.getStage()) {
-            setSelectedShapeId(null);
-        }
-        return;
+      if (e.target === e.target.getStage()) {
+        setSelectedShapeId(null);
+      }
+      return;
     }
 
     const pos = getMousePos(e);
@@ -242,6 +237,17 @@ const App = () => {
     }
   }, [selectedShapeId]);
 
+  const btnStyle = (active) => ({
+    padding: '6px 12px',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    backgroundColor: active ? '#fff' : 'transparent',
+    boxShadow: active ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+    fontWeight: active ? 'bold' : 'normal',
+    color: '#333',
+  });
+
   return (
     <div style={{ 
       position: 'fixed', 
@@ -252,111 +258,49 @@ const App = () => {
       backgroundColor: '#f0f0f0', 
       overflow: 'hidden',
       margin: 0,
-      padding: 0
+      padding: 0,
     }}>
       <div style={{ 
         position: 'absolute', top: 10, left: 10, zIndex: 10,
-        display: 'flex', gap: '6px', background: 'white', padding: '8px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
-        alignItems: 'center', fontFamily: 'sans-serif'
+        display: 'flex', gap: '6px', background: 'white', padding: '8px',
+        borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.15)',
+        alignItems: 'center', fontFamily: 'sans-serif', color: '#333',
       }}>
         {/* Drawing Tools */}
         <div style={{ display: 'flex', gap: '4px', padding: '4px', background: '#f5f5f5', borderRadius: '8px' }}>
-          <button 
-            onClick={() => setTool('select')} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: tool === 'select' ? '#fff' : 'transparent',
-              boxShadow: tool === 'select' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-              fontWeight: tool === 'select' ? 'bold' : 'normal' 
-            }}
-          >选择</button>
-          <button 
-            onClick={() => setTool('rect')} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: tool === 'rect' ? '#fff' : 'transparent',
-              boxShadow: tool === 'rect' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-              fontWeight: tool === 'rect' ? 'bold' : 'normal' 
-            }}
-          >矩形</button>
-          <button 
-            onClick={() => setTool('circle')} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: tool === 'circle' ? '#fff' : 'transparent',
-              boxShadow: tool === 'circle' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-              fontWeight: tool === 'circle' ? 'bold' : 'normal' 
-            }}
-          >圆形</button>
-          <button 
-            onClick={() => setTool('line')} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: tool === 'line' ? '#fff' : 'transparent',
-              boxShadow: tool === 'line' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-              fontWeight: tool === 'line' ? 'bold' : 'normal' 
-            }}
-          >直线</button>
-          <button 
-            onClick={() => setTool('pen')} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: tool === 'pen' ? '#fff' : 'transparent',
-              boxShadow: tool === 'pen' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
-              fontWeight: tool === 'pen' ? 'bold' : 'normal' 
-            }}
-          >画笔</button>
-        </div>
+          <button onClick={() => setTool('select')} style={btnStyle(tool === 'select')}>选择</button>
+          <button onClick={() => setTool('rect')} style={btnStyle(tool === 'rect')}>矩形</button>
+          <button onClick={() => setTool('circle')} style={btnStyle(tool === 'circle')}>圆形</button>
+          <button onClick={() => setTool('line')} style={btnStyle(tool === 'line')}>直线</button>
+          <button onClick={() => setTool('pen')} style={btnStyle(tool === 'pen')}>画笔</button>
+        </div >
 
         <div style={{ width: '1px', height: '24px', background: '#ddd', margin: '0 4px' }} />
 
         {/* History Tools */}
         <div style={{ display: 'flex', gap: '4px', padding: '4px', background: '#f5f5f5', borderRadius: '8px' }}>
-          <button 
-            onClick={undo} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: 'transparent',
-            }}
-          >撤销</button>
-          <button 
-            onClick={redo} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: 'transparent',
-            }}
-          >重做</button>
-        </div>
+          <button onClick={undo} style={btnStyle(false)}>撤销</button>
+          <button onClick={redo} style={btnStyle(false)}>重做</button>
+        </div >
 
         <div style={{ width: '1px', height: '24px', background: '#ddd', margin: '0 4px' }} />
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '6px' }}>
-          <button 
-            onClick={() => { if(window.confirm('Are you sure?')) clearAll(); }} 
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              color: '#ff4d4f', background: 'transparent',
-            }}
+          <button
+            onClick={() => { if (window.confirm('Are you sure?')) clearAll(); }}
+            style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer', color: '#ff4d4f', background: 'transparent' }}
           >清空</button>
-          <button 
+          <button
             onClick={() => exportAsPNG(stageRef.current)}
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: '#e6f7ff', color: '#1890ff'
-            }}
+            style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: '#e6f7ff', color: '#1890ff' }}
           >PNG</button>
-          <button 
+          <button
             onClick={() => exportAsSVG(shapes)}
-            style={{ 
-              padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer',
-              backgroundColor: '#f6ffed', color: '#52c41a'
-            }}
+            style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: '#f6ffed', color: '#52c41a' }}
           >SVG</button>
-        </div>
-      </div>
-
-
+        </div >
+      </div >
 
       <PropertyEditor />
 
@@ -389,7 +333,7 @@ const App = () => {
               draggable: true,
               onDragEnd: handleShapeDragEnd,
               onClick: (e) => {
-                e.cancelBubble = true; 
+                e.cancelBubble = true;
                 setSelectedShapeId(shape.id);
               },
               onTransformEnd: handleTransformEnd,
