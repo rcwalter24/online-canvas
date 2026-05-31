@@ -24,12 +24,12 @@ try {
   console.log('Building electron main...');
   const mainPath = path.resolve(__dirname, 'electron', 'main.js');
   console.log('Attempting to build main at:', mainPath);
-  execSync(`esbuild ${mainPath} --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/main.js`, { stdio: 'inherit' });
+  execSync(`esbuild ${mainPath} --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/main.cjs`, { stdio: 'inherit' });
 
   console.log('Building electron preload...');
   const preloadPath = path.resolve(__dirname, 'electron', 'preload.js');
   console.log('Attempting to build preload at:', preloadPath);
-  execSync(`esbuild ${preloadPath} --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/preload.js`, { stdio: 'inherit' });
+  execSync(`esbuild ${preloadPath} --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/preload.cjs`, { stdio: 'inherit' });
 
   console.log('Running electron-builder...');
   execSync('electron-builder --publish never', { stdio: 'inherit' });
