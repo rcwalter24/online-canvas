@@ -6,7 +6,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && esbuild electron/main.js --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/main.js && esbuild electron/preload.js --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/preload.js && electron-builder",
+    "build": "vite build && esbuild $(pwd)/electron/main.js --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/main.js && esbuild $(pwd)/electron/preload.js --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/preload.js && electron-builder",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\""
