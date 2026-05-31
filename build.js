@@ -32,7 +32,7 @@ try {
   execSync(`esbuild ${preloadPath} --bundle --platform=node --external:electron --format=cjs --outfile=dist-electron/preload.js`, { stdio: 'inherit' });
 
   console.log('Running electron-builder...');
-  execSync('electron-builder', { stdio: 'inherit' });
+  execSync('electron-builder --publish never', { stdio: 'inherit' });
 } catch (error) {
   console.error('Build failed:', error.message);
   process.exit(1);
